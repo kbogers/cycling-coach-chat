@@ -12,6 +12,7 @@
 - **Strava cache:** 5-minute TTL in-memory for activity JSON before each chat context build.
 - **LLM:** Provider interface in `lib/llm/` with Gemini implementation; swap providers later.
 - **Git:** Dedicated repository in this project folder (not the parent `Documents` tree). Remote: [kbogers/cycling-coach-chat](https://github.com/kbogers/cycling-coach-chat).
+- **iron-session v8:** Session shape is not merged from a `SessionData` module augmentation; pass `getIronSession<SessionData>(...)` with an explicit `SessionData` type in `lib/session.ts` so `session.athleteId` type-checks on Vercel.
 
 ## Completed
 

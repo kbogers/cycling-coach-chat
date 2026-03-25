@@ -11,9 +11,11 @@
 - **TLS to Strava from Node:** Node 20 bundled OpenSSL root CA store does not include GoDaddy Root G2 (Strava's CA). Fix: `NODE_EXTRA_CA_CERTS=./certs/godaddy-root-g2.pem` baked into the `dev` script in package.json. The PEM is a public root cert, safe to commit. Callback catches TLS errors and redirects with `error=strava_tls`.
 - **Strava cache:** 5-minute TTL in-memory for activity JSON before each chat context build.
 - **LLM:** Provider interface in `lib/llm/` with Gemini implementation; swap providers later.
+- **Git:** Dedicated repository in this project folder (not the parent `Documents` tree). Remote: [kbogers/cycling-coach-chat](https://github.com/kbogers/cycling-coach-chat).
 
 ## Completed
 
+- [x] Initial commit pushed to GitHub (`main` → `origin/main`).
 - [x] Scaffold Next.js app, Tailwind, UI primitives, layout (Inter + JetBrains Mono, purple accent).
 - [x] Onboarding wizard (5 steps), local draft + server pending + Strava OAuth callback.
 - [x] Chat UI with streaming, markdown, localStorage history, settings sheet.

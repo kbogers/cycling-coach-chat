@@ -1,8 +1,13 @@
+import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { fetchAthlete, getStravaRedirectUri } from "@/lib/strava";
+import {
+  OAUTH_PENDING_COOKIE_NAME,
+  unsealOAuthPendingPayload,
+} from "@/lib/oauth-pending";
 import { saveSession } from "@/lib/session";
-import { setUser, takePendingOnboarding } from "@/lib/store";
-import type { StravaTokens } from "@/lib/types";
+import { setUser } from "@/lib/store";
+import type { StravaTokens, UserProfile } from "@/lib/types";
 
 /** Node fetch fails behind corporate TLS inspection (Zscaler, etc.) with this in the error chain. */
 function isTlsOrCertFetchError(e: unknown): boolean {
@@ -44,11 +49,31 @@ export async function GET(request: Request) {
     );
   }
 
-  const pending = takePendingOnboarding(state);
+  const cookieStore = await cookies();
+  const seal = cookieStore.get(OAUTH_PENDING_COOKIE_NAME)?.value;
+  let pending: {
+    profile: UserProfile;
+    geminiKeyEncrypted: string;
+  } | null = null;
+  if (seal && state) {
+    try {
+      const data = await unsealOAuthPendingPayload(seal);
+      if (data.stateId === state) {
+        pending = {
+          profile: data.profile,
+          geminiKeyEncrypted: data.geminiKeyEncrypted,
+        };
+      }
+    } catch {
+      /* invalid or expired seal */
+    }
+  }
   if (!pending) {
-    return NextResponse.redirect(
+    const res = NextResponse.redirect(
       `${base}/onboarding?error=${encodeURIComponent("session_expired_retry")}`
     );
+    res.cookies.delete(OAUTH_PENDING_COOKIE_NAME);
+    return res;
   }
 
   const clientId = process.env.STRAVA_CLIENT_ID;
@@ -107,7 +132,9 @@ export async function GET(request: Request) {
 
     await saveSession({ athleteId: athlete.id });
 
-    return NextResponse.redirect(`${base}/chat?welcome=1`);
+    const ok = NextResponse.redirect(`${base}/chat?welcome=1`);
+    ok.cookies.delete(OAUTH_PENDING_COOKIE_NAME);
+    return ok;
   } catch (e) {
     console.error("[strava/callback]", e);
     if (isTlsOrCertFetchError(e)) {

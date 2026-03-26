@@ -1,7 +1,13 @@
 import { randomUUID } from "crypto";
+import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
+import {
+  OAUTH_PENDING_COOKIE_NAME,
+  OAUTH_PENDING_MAX_AGE_SEC,
+  sealOAuthPendingPayload,
+} from "@/lib/oauth-pending";
 import { getSession } from "@/lib/session";
-import { getUser, savePendingOnboarding } from "@/lib/store";
+import { getUser } from "@/lib/store";
 
 /** Creates a pending OAuth state from the logged-in user (reconnect Strava). */
 export async function POST() {
@@ -15,11 +21,19 @@ export async function POST() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const pendingId = randomUUID();
-  savePendingOnboarding(
-    pendingId,
-    user.profile,
-    user.geminiKeyEncrypted
-  );
-  return NextResponse.json({ pendingId });
+  const stateId = randomUUID();
+  const seal = await sealOAuthPendingPayload({
+    stateId,
+    profile: user.profile,
+    geminiKeyEncrypted: user.geminiKeyEncrypted,
+  });
+  const cookieStore = await cookies();
+  cookieStore.set(OAUTH_PENDING_COOKIE_NAME, seal, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    maxAge: OAUTH_PENDING_MAX_AGE_SEC,
+    path: "/",
+  });
+  return NextResponse.json({ pendingId: stateId });
 }

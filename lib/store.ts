@@ -7,18 +7,10 @@ export type StoredUser = {
   athlete: { id: number; firstname: string; lastname: string; profile?: string };
 };
 
-type PendingOnboarding = {
-  profile: UserProfile;
-  geminiKeyEncrypted: string;
-  expiresAt: number;
-};
-
-const TTL_MS = 1000 * 60 * 15;
 const CACHE_TTL_MS = 1000 * 60 * 5;
 
 const g = globalThis as unknown as {
   __userStore?: Map<number, StoredUser>;
-  __pendingStore?: Map<string, PendingOnboarding>;
   __stravaCache?: Map<string, { at: number; payload: string }>;
 };
 
@@ -27,36 +19,9 @@ function users(): Map<number, StoredUser> {
   return g.__userStore;
 }
 
-function pending(): Map<string, PendingOnboarding> {
-  if (!g.__pendingStore) g.__pendingStore = new Map();
-  return g.__pendingStore;
-}
-
 function stravaCache(): Map<string, { at: number; payload: string }> {
   if (!g.__stravaCache) g.__stravaCache = new Map();
   return g.__stravaCache;
-}
-
-export function savePendingOnboarding(
-  id: string,
-  profile: UserProfile,
-  geminiKeyEncrypted: string
-): void {
-  pending().set(id, {
-    profile,
-    geminiKeyEncrypted,
-    expiresAt: Date.now() + TTL_MS,
-  });
-}
-
-export function takePendingOnboarding(id: string): PendingOnboarding | null {
-  const p = pending().get(id);
-  if (!p || p.expiresAt < Date.now()) {
-    pending().delete(id);
-    return null;
-  }
-  pending().delete(id);
-  return p;
 }
 
 export function setUser(athleteId: number, data: StoredUser): void {

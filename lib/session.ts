@@ -27,6 +27,11 @@ function sessionPassword(): string {
 
 let sessionOptionsCache: SessionOptions | undefined;
 
+/** Same secret as iron-session; used for sealData on the OAuth pending cookie (serverless-safe). */
+export function getSessionSealPassword(): string {
+  return sessionPassword();
+}
+
 function getSessionOptions(): SessionOptions {
   if (!sessionOptionsCache) {
     sessionOptionsCache = {

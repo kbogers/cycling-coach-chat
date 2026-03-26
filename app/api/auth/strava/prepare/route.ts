@@ -1,5 +1,4 @@
 import { randomUUID } from "crypto";
-import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import {
   OAUTH_PENDING_COOKIE_NAME,
@@ -27,13 +26,13 @@ export async function POST() {
     profile: user.profile,
     geminiKeyEncrypted: user.geminiKeyEncrypted,
   });
-  const cookieStore = await cookies();
-  cookieStore.set(OAUTH_PENDING_COOKIE_NAME, seal, {
+  const res = NextResponse.json({ pendingId: stateId });
+  res.cookies.set(OAUTH_PENDING_COOKIE_NAME, seal, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
+    sameSite: "lax" as const,
     maxAge: OAUTH_PENDING_MAX_AGE_SEC,
     path: "/",
   });
-  return NextResponse.json({ pendingId: stateId });
+  return res;
 }

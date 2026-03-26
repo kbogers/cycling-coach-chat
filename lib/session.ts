@@ -1,5 +1,6 @@
-import { getIronSession, type SessionOptions } from "iron-session";
+import { getIronSession, sealData, type SessionOptions } from "iron-session";
 import { cookies } from "next/headers";
+import type { NextResponse } from "next/server";
 
 /** Shape stored in the iron-session cookie (iron-session v8 requires an explicit generic on getIronSession). */
 export type SessionData = {
@@ -65,4 +66,23 @@ export async function clearSession(): Promise<void> {
   const cookieStore = await cookies();
   const session = await getIronSession<SessionData>(cookieStore, getSessionOptions());
   session.destroy();
+}
+
+/** Set iron-session cookie directly on a NextResponse (avoids cookies() merge issues). */
+export async function saveSessionToResponse(
+  data: { athleteId?: number },
+  response: NextResponse,
+): Promise<void> {
+  const opts = getSessionOptions();
+  const sealed = await sealData(data, {
+    password: opts.password as string,
+    ttl: opts.cookieOptions?.maxAge ?? 0,
+  });
+  response.cookies.set(opts.cookieName, sealed, {
+    httpOnly: opts.cookieOptions?.httpOnly,
+    secure: opts.cookieOptions?.secure,
+    sameSite: opts.cookieOptions?.sameSite as "lax",
+    maxAge: opts.cookieOptions?.maxAge,
+    path: opts.cookieOptions?.path,
+  });
 }

@@ -5,9 +5,9 @@ import {
   OAUTH_PENDING_COOKIE_NAME,
   unsealOAuthPendingPayload,
 } from "@/lib/oauth-pending";
-import { saveSession } from "@/lib/session";
+import { saveSessionToResponse } from "@/lib/session";
 import { setUser } from "@/lib/store";
-import { saveUserCookie } from "@/lib/user-cookie";
+import { setUserCookieOnResponse } from "@/lib/user-cookie";
 import type { StravaTokens, UserProfile } from "@/lib/types";
 
 /** Node fetch fails behind corporate TLS inspection (Zscaler, etc.) with this in the error chain. */
@@ -56,7 +56,10 @@ export async function GET(request: Request) {
     profile: UserProfile;
     geminiKeyEncrypted: string;
   } | null = null;
-  if (seal && state) {
+
+  if (!seal) {
+    console.error("[strava/callback] pending cookie missing");
+  } else if (state) {
     try {
       const data = await unsealOAuthPendingPayload(seal);
       if (data.stateId === state) {
@@ -64,9 +67,11 @@ export async function GET(request: Request) {
           profile: data.profile,
           geminiKeyEncrypted: data.geminiKeyEncrypted,
         };
+      } else {
+        console.error("[strava/callback] state mismatch:", state, "vs", data.stateId);
       }
-    } catch {
-      /* invalid or expired seal */
+    } catch (e) {
+      console.error("[strava/callback] unseal failed:", e);
     }
   }
   if (!pending) {
@@ -131,10 +136,10 @@ export async function GET(request: Request) {
       },
     };
     setUser(athlete.id, userData);
-    await saveUserCookie(userData);
-    await saveSession({ athleteId: athlete.id });
 
     const ok = NextResponse.redirect(`${base}/chat?welcome=1`);
+    await setUserCookieOnResponse(userData, ok);
+    await saveSessionToResponse({ athleteId: athlete.id }, ok);
     ok.cookies.delete(OAUTH_PENDING_COOKIE_NAME);
     return ok;
   } catch (e) {

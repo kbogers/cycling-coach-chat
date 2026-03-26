@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { clearSession, getSession } from "@/lib/session";
 import { deleteUser } from "@/lib/store";
-import { deleteUserCookie } from "@/lib/user-cookie";
+import { deleteUserCookieOnResponse } from "@/lib/user-cookie";
 
 export async function POST() {
   const session = await getSession();
@@ -9,7 +9,8 @@ export async function POST() {
   if (id) {
     deleteUser(id);
   }
-  await deleteUserCookie();
   await clearSession();
-  return NextResponse.json({ ok: true });
+  const res = NextResponse.json({ ok: true });
+  deleteUserCookieOnResponse(res);
+  return res;
 }

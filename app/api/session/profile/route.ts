@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { encryptSecret } from "@/lib/crypto";
 import { getSession } from "@/lib/session";
 import { setUser } from "@/lib/store";
-import { getUserFromCookie, saveUserCookie } from "@/lib/user-cookie";
+import { getUserFromCookie, setUserCookieOnResponse } from "@/lib/user-cookie";
 import { parseUserProfile } from "@/lib/validation";
 
 export async function PATCH(request: Request) {
@@ -36,8 +36,9 @@ export async function PATCH(request: Request) {
     }
     const updated = { ...user, profile, geminiKeyEncrypted };
     setUser(athleteId, updated);
-    await saveUserCookie(updated);
-    return NextResponse.json({ ok: true });
+    const res = NextResponse.json({ ok: true });
+    await setUserCookieOnResponse(updated, res);
+    return res;
   } catch (e) {
     const message = e instanceof Error ? e.message : "Invalid request";
     return NextResponse.json({ error: message }, { status: 400 });

@@ -11,7 +11,7 @@ import {
   type StravaActivity,
 } from "@/lib/strava";
 import { getCachedPayload, setCachedPayload, setUser } from "@/lib/store";
-import { getUserFromCookie, saveUserCookie } from "@/lib/user-cookie";
+import { getUserFromCookie } from "@/lib/user-cookie";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -77,13 +77,13 @@ export async function POST(request: Request) {
   }
 
   const freshTokens = await getValidStravaTokens(user.strava);
+  let refreshedUser = user;
   if (
     freshTokens.accessToken !== user.strava.accessToken ||
     freshTokens.expiresAt !== user.strava.expiresAt
   ) {
-    const updated = { ...user, strava: freshTokens };
-    setUser(athleteId, updated);
-    await saveUserCookie(updated);
+    refreshedUser = { ...user, strava: freshTokens };
+    setUser(athleteId, refreshedUser);
   }
 
   const cacheKey = `strava-activities:${athleteId}`;
@@ -102,11 +102,11 @@ export async function POST(request: Request) {
   }
 
   const stravaContext = buildStravaContextBlock(activities, last.content);
-  const systemPrompt = buildSystemPrompt(user.profile, stravaContext);
+  const systemPrompt = buildSystemPrompt(refreshedUser.profile, stravaContext);
 
   let apiKey: string;
   try {
-    apiKey = decryptSecret(user.geminiKeyEncrypted, enc);
+    apiKey = decryptSecret(refreshedUser.geminiKeyEncrypted, enc);
   } catch {
     return NextResponse.json(
       { error: "Could not decrypt API key. Update it in Settings." },

@@ -1,3 +1,4 @@
+import { getRedis } from "@/lib/kv";
 import type { StravaTokens, UserProfile } from "@/lib/types";
 
 export type StoredUser = {
@@ -7,44 +8,69 @@ export type StoredUser = {
   athlete: { id: number; firstname: string; lastname: string; profile?: string };
 };
 
-const CACHE_TTL_MS = 1000 * 60 * 5;
-
-const g = globalThis as unknown as {
-  __userStore?: Map<number, StoredUser>;
-  __stravaCache?: Map<string, { at: number; payload: string }>;
+export type PendingOnboarding = {
+  profile: UserProfile;
+  geminiKeyEncrypted: string;
 };
 
-function users(): Map<number, StoredUser> {
-  if (!g.__userStore) g.__userStore = new Map();
-  return g.__userStore;
+const USER_KEY = (id: number) => `user:${id}`;
+const PENDING_KEY = (stateId: string) => `pending:${stateId}`;
+const CACHE_KEY = (key: string) => `cache:${key}`;
+
+const USER_TTL_SEC = 60 * 60 * 24 * 30; // 30 days
+const PENDING_TTL_SEC = 60 * 15; // 15 minutes
+const CACHE_TTL_SEC = 60 * 5; // 5 minutes
+
+// ── User records ────────────────────────────────────────────────────
+
+export async function setUser(
+  athleteId: number,
+  data: StoredUser,
+): Promise<void> {
+  await getRedis().set(USER_KEY(athleteId), data, { ex: USER_TTL_SEC });
 }
 
-function stravaCache(): Map<string, { at: number; payload: string }> {
-  if (!g.__stravaCache) g.__stravaCache = new Map();
-  return g.__stravaCache;
+export async function getUser(
+  athleteId: number,
+): Promise<StoredUser | null> {
+  return getRedis().get<StoredUser>(USER_KEY(athleteId));
 }
 
-export function setUser(athleteId: number, data: StoredUser): void {
-  users().set(athleteId, data);
+export async function deleteUser(athleteId: number): Promise<void> {
+  await getRedis().del(USER_KEY(athleteId));
 }
 
-export function getUser(athleteId: number): StoredUser | undefined {
-  return users().get(athleteId);
+// ── Pending onboarding (OAuth state) ────────────────────────────────
+
+export async function savePendingOnboarding(
+  stateId: string,
+  data: PendingOnboarding,
+): Promise<void> {
+  await getRedis().set(PENDING_KEY(stateId), data, { ex: PENDING_TTL_SEC });
 }
 
-export function deleteUser(athleteId: number): void {
-  users().delete(athleteId);
+/** Retrieve and delete in one go (single-use). */
+export async function takePendingOnboarding(
+  stateId: string,
+): Promise<PendingOnboarding | null> {
+  const kv = getRedis();
+  const key = PENDING_KEY(stateId);
+  const data = await kv.get<PendingOnboarding>(key);
+  if (data) await kv.del(key);
+  return data;
 }
 
-export function getCachedPayload(key: string): string | null {
-  const row = stravaCache().get(key);
-  if (!row || Date.now() - row.at > CACHE_TTL_MS) {
-    stravaCache().delete(key);
-    return null;
-  }
-  return row.payload;
+// ── Strava activity cache ───────────────────────────────────────────
+
+export async function getCachedPayload(
+  key: string,
+): Promise<string | null> {
+  return getRedis().get<string>(CACHE_KEY(key));
 }
 
-export function setCachedPayload(key: string, payload: string): void {
-  stravaCache().set(key, { at: Date.now(), payload });
+export async function setCachedPayload(
+  key: string,
+  payload: string,
+): Promise<void> {
+  await getRedis().set(CACHE_KEY(key), payload, { ex: CACHE_TTL_SEC });
 }

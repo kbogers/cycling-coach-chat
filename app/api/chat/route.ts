@@ -10,8 +10,7 @@ import {
   getValidStravaTokens,
   type StravaActivity,
 } from "@/lib/strava";
-import { getCachedPayload, setCachedPayload, setUser } from "@/lib/store";
-import { getUserFromCookie } from "@/lib/user-cookie";
+import { getCachedPayload, setCachedPayload, setUser, getUser } from "@/lib/store";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -37,7 +36,7 @@ export async function POST(request: Request) {
   if (!enc || enc.length < 32) {
     return NextResponse.json(
       { error: "Encryption not configured" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 
@@ -46,7 +45,7 @@ export async function POST(request: Request) {
   if (!athleteId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  const user = await getUserFromCookie();
+  const user = await getUser(athleteId);
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -54,7 +53,7 @@ export async function POST(request: Request) {
   if (!checkRate(athleteId)) {
     return NextResponse.json(
       { error: "Too many requests. Wait a minute and try again." },
-      { status: 429 }
+      { status: 429 },
     );
   }
 
@@ -72,45 +71,43 @@ export async function POST(request: Request) {
   if (last.role !== "user" || typeof last.content !== "string") {
     return NextResponse.json(
       { error: "Last message must be a user message" },
-      { status: 400 }
+      { status: 400 },
     );
   }
 
   const freshTokens = await getValidStravaTokens(user.strava);
-  let refreshedUser = user;
   if (
     freshTokens.accessToken !== user.strava.accessToken ||
     freshTokens.expiresAt !== user.strava.expiresAt
   ) {
-    refreshedUser = { ...user, strava: freshTokens };
-    setUser(athleteId, refreshedUser);
+    await setUser(athleteId, { ...user, strava: freshTokens });
   }
 
   const cacheKey = `strava-activities:${athleteId}`;
-  const cached = getCachedPayload(cacheKey);
+  const cached = await getCachedPayload(cacheKey);
   let activities: StravaActivity[];
   if (cached) {
     try {
       activities = JSON.parse(cached) as StravaActivity[];
     } catch {
       activities = await fetchRecentActivities(freshTokens.accessToken);
-      setCachedPayload(cacheKey, JSON.stringify(activities));
+      await setCachedPayload(cacheKey, JSON.stringify(activities));
     }
   } else {
     activities = await fetchRecentActivities(freshTokens.accessToken);
-    setCachedPayload(cacheKey, JSON.stringify(activities));
+    await setCachedPayload(cacheKey, JSON.stringify(activities));
   }
 
   const stravaContext = buildStravaContextBlock(activities, last.content);
-  const systemPrompt = buildSystemPrompt(refreshedUser.profile, stravaContext);
+  const systemPrompt = buildSystemPrompt(user.profile, stravaContext);
 
   let apiKey: string;
   try {
-    apiKey = decryptSecret(refreshedUser.geminiKeyEncrypted, enc);
+    apiKey = decryptSecret(user.geminiKeyEncrypted, enc);
   } catch {
     return NextResponse.json(
       { error: "Could not decrypt API key. Update it in Settings." },
-      { status: 500 }
+      { status: 500 },
     );
   }
 

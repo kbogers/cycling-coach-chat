@@ -5,12 +5,11 @@
 - **Onboarding profile:** Removed optional preferred session duration. Added free-text `notes` (max 2000 chars) stored on `UserProfile`, shown in system prompt as athlete context. Gemini API key is verified server-side via Google `v1beta/models` list before leaving the API key step (route `POST /api/gemini/validate-key`).
 - **npm / Node on PATH:** A legacy `node` npm package in `~/node_modules` (v15.4) shadowed Homebrew Node 20 via `~/node_modules/.bin/node`. That old runtime does not resolve `require("node:fs")`, which broke `napi-postinstall` (used by `unrs-resolver` → ESLint). Removed with `npm uninstall node` from the home directory so `which node` points at the real Node 20 binary.
 - **Stack:** Next.js App Router, Tailwind, shadcn-style UI (Radix primitives in repo), Strava OAuth, Gemini via `@google/generative-ai`, Vercel Analytics.
-- **Persistence (v1):** User records (profile, encrypted Gemini key, Strava tokens, athlete info) are stored in **sealed chunked HttpOnly cookies** (`acc_user.0`, `.1`, …) so they survive across Vercel serverless instances. In-memory `Map` in `lib/store.ts` serves as a warm cache within a single instance. Production should eventually use **Vercel KV or Postgres** as in PRD for durability.
-- **Strava OAuth pending (onboarding / reconnect):** Not in-memory — Vercel serverless uses many instances, so `savePendingOnboarding` in RAM never matched the callback. Pending payload is sealed with `iron-session` `sealData` into HttpOnly cookie `acc_coach_oauth_pending` (15 min TTL); `state` query param must match `stateId` inside the seal. Security posture is similar to iron-session cookies: confidentiality + integrity bound to `SESSION_SECRET`; acceptable for v1. Optional hardening: store only an opaque `state` server-side (see Next).
+- **Persistence:** All server-side data (user records, Strava tokens, encrypted Gemini key, pending onboarding state, activity cache) stored in **Upstash Redis** via `@upstash/redis`. Env vars: `KV_REST_API_URL` + `KV_REST_API_TOKEN` (Vercel KV) or `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN`. Keys: `user:{athleteId}` (30d TTL), `pending:{stateId}` (15min TTL, single-use delete on callback), `cache:strava-activities:{athleteId}` (5min TTL). No cookies or in-memory maps for application data — only `iron-session` cookie for session identity.
 - **Session:** `iron-session` cookie with `athleteId` only; Strava user id is the identifier. `SESSION_SECRET` must be at least 32 characters; a shorter value makes `iron-session` throw on save (HTTP 500 on Strava callback). Dev uses a safe fallback + console warning when the secret is missing or too short; production must set a long secret.
 - **Strava OAuth `redirect_uri`:** Authorize + token exchange use `getStravaRedirectUri(request)` so production uses the request host (e.g. Vercel). If `STRAVA_REDIRECT_URI` is localhost but the request is not, env is ignored (avoids mis-copied `.env` on Vercel). Optional `STRAVA_REDIRECT_URI` still overrides when it matches the request context. Strava app must list each callback domain (e.g. `localhost` + `cycling-coach-chat.vercel.app`).
 - **TLS to Strava from Node:** Node 20 bundled OpenSSL root CA store does not include GoDaddy Root G2 (Strava's CA). Fix: `NODE_EXTRA_CA_CERTS=./certs/godaddy-root-g2.pem` baked into the `dev` script in package.json. The PEM is a public root cert, safe to commit. Callback catches TLS errors and redirects with `error=strava_tls`.
-- **Strava cache:** 5-minute TTL in-memory for activity JSON before each chat context build.
+- **Strava cache:** 5-minute TTL in Redis for activity JSON before each chat context build.
 - **LLM:** Provider interface in `lib/llm/` with Gemini implementation; swap providers later.
 - **Git:** Dedicated repository in this project folder (not the parent `Documents` tree). Remote: [kbogers/cycling-coach-chat](https://github.com/kbogers/cycling-coach-chat).
 - **iron-session v8:** Session shape is not merged from a `SessionData` module augmentation; pass `getIronSession<SessionData>(...)` with an explicit `SessionData` type in `lib/session.ts` so `session.athleteId` type-checks on Vercel.
@@ -24,9 +23,11 @@
 - [x] API routes: onboarding pending, Strava OAuth, session, profile PATCH, chat stream, disconnect, Strava prepare (reconnect), Gemini validate-key.
 - [x] Vercel Analytics + `track` events from PRD.
 
+## Completed
+
+- [x] Replace in-memory store with Upstash Redis (Vercel KV) for production persistence.
+
 ## Next
 
-- [ ] Replace in-memory store with Vercel KV / Postgres for production.
-- [ ] Optional: move OAuth pending from sealed cookie to **Vercel KV** (or Postgres): opaque `state` id only in the browser, `SETEX` payload + TTL + single-use delete on callback — reduces cookie size and avoids carrying encrypted profile/key in the client at all during the OAuth round-trip.
 - [ ] Optional: Zod validation, stricter rate limits, IP-based limits.
 - [ ] Optional: dark mode, HR-only / unknown FTP modes (open question in PRD).

@@ -1,11 +1,7 @@
 import { randomUUID } from "crypto";
 import { NextResponse } from "next/server";
 import { encryptSecret } from "@/lib/crypto";
-import {
-  OAUTH_PENDING_COOKIE_NAME,
-  OAUTH_PENDING_MAX_AGE_SEC,
-  sealOAuthPendingPayload,
-} from "@/lib/oauth-pending";
+import { savePendingOnboarding } from "@/lib/store";
 import { parseUserProfile } from "@/lib/validation";
 
 export async function POST(request: Request) {
@@ -13,7 +9,7 @@ export async function POST(request: Request) {
   if (!enc || enc.length < 32) {
     return NextResponse.json(
       { error: "Server ENCRYPTION_KEY is not configured (min 32 chars)." },
-      { status: 500 }
+      { status: 500 },
     );
   }
 
@@ -25,25 +21,13 @@ export async function POST(request: Request) {
     if (!geminiApiKey) {
       return NextResponse.json(
         { error: "Gemini API key is required." },
-        { status: 400 }
+        { status: 400 },
       );
     }
     const geminiKeyEncrypted = encryptSecret(geminiApiKey, enc);
     const stateId = randomUUID();
-    const seal = await sealOAuthPendingPayload({
-      stateId,
-      profile,
-      geminiKeyEncrypted,
-    });
-    const res = NextResponse.json({ pendingId: stateId });
-    res.cookies.set(OAUTH_PENDING_COOKIE_NAME, seal, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax" as const,
-      maxAge: OAUTH_PENDING_MAX_AGE_SEC,
-      path: "/",
-    });
-    return res;
+    await savePendingOnboarding(stateId, { profile, geminiKeyEncrypted });
+    return NextResponse.json({ pendingId: stateId });
   } catch (e) {
     const message = e instanceof Error ? e.message : "Invalid request";
     return NextResponse.json({ error: message }, { status: 400 });

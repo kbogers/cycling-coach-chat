@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
-import { getUserFromCookie } from "@/lib/user-cookie";
+import { getUser } from "@/lib/store";
 
 export async function GET() {
   const session = await getSession();
@@ -8,7 +8,7 @@ export async function GET() {
   if (!athleteId) {
     return NextResponse.json({ authenticated: false }, { status: 401 });
   }
-  const user = await getUserFromCookie();
+  const user = await getUser(athleteId);
   if (!user) {
     return NextResponse.json({ authenticated: false }, { status: 401 });
   }

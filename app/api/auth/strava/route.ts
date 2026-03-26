@@ -1,16 +1,18 @@
 import { NextResponse } from "next/server";
+import { getStravaRedirectUri } from "@/lib/strava";
 
 const STRAVA_AUTH = "https://www.strava.com/oauth/authorize";
 
 export async function GET(request: Request) {
   const clientId = process.env.STRAVA_CLIENT_ID;
-  const redirectUri = process.env.STRAVA_REDIRECT_URI;
-  if (!clientId || !redirectUri) {
+  if (!clientId) {
     return NextResponse.json(
       { error: "Strava OAuth is not configured." },
       { status: 500 }
     );
   }
+
+  const redirectUri = getStravaRedirectUri(request);
 
   const { searchParams } = new URL(request.url);
   const pendingId = searchParams.get("pendingId");

@@ -2,6 +2,35 @@ import type { StravaTokens } from "@/lib/types";
 
 const STRAVA_API = "https://www.strava.com/api/v3";
 
+const STRAVA_CALLBACK_PATH = "/api/auth/strava/callback";
+
+/**
+ * OAuth redirect_uri must match the authorize request and token exchange exactly.
+ * Prefer the current request origin so production (e.g. Vercel) works without a
+ * separate env per host. Optional STRAVA_REDIRECT_URI overrides when set; if it
+ * points at localhost but the incoming request is not localhost, ignore it so a
+ * mis-copied .env on Vercel does not send users to localhost after Strava auth.
+ */
+export function getStravaRedirectUri(request: Request): string {
+  const fromRequest = new URL(request.url).origin + STRAVA_CALLBACK_PATH;
+  const explicit = process.env.STRAVA_REDIRECT_URI?.trim();
+  if (!explicit) return fromRequest;
+  try {
+    const explicitHost = new URL(explicit).hostname;
+    const reqHost = new URL(request.url).hostname;
+    if (
+      (explicitHost === "localhost" || explicitHost === "127.0.0.1") &&
+      reqHost !== "localhost" &&
+      reqHost !== "127.0.0.1"
+    ) {
+      return fromRequest;
+    }
+  } catch {
+    return fromRequest;
+  }
+  return explicit;
+}
+
 export type StravaActivity = {
   id: number;
   name: string;

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { fetchAthlete } from "@/lib/strava";
+import { fetchAthlete, getStravaRedirectUri } from "@/lib/strava";
 import { saveSession } from "@/lib/session";
 import { setUser, takePendingOnboarding } from "@/lib/store";
 import type { StravaTokens } from "@/lib/types";
@@ -53,8 +53,8 @@ export async function GET(request: Request) {
 
   const clientId = process.env.STRAVA_CLIENT_ID;
   const clientSecret = process.env.STRAVA_CLIENT_SECRET;
-  const redirectUri = process.env.STRAVA_REDIRECT_URI;
-  if (!clientId || !clientSecret || !redirectUri) {
+  const redirectUri = getStravaRedirectUri(request);
+  if (!clientId || !clientSecret) {
     return NextResponse.redirect(
       `${base}/onboarding?error=${encodeURIComponent("server_config")}`
     );

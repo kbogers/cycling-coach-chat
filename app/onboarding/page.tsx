@@ -2,13 +2,13 @@ import { redirect } from "next/navigation";
 import { Suspense } from "react";
 import { OnboardingWizard } from "@/components/onboarding-wizard";
 import { getSession } from "@/lib/session";
-import { getUser } from "@/lib/store";
+import { getUserFromCookie } from "@/lib/user-cookie";
 
 export const dynamic = "force-dynamic";
 
 export default async function OnboardingPage() {
   const session = await getSession();
-  if (session.athleteId && getUser(session.athleteId)) {
+  if (session.athleteId && (await getUserFromCookie())) {
     redirect("/chat");
   }
 

@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { encryptSecret } from "@/lib/crypto";
 import { getSession } from "@/lib/session";
-import { getUser, setUser } from "@/lib/store";
+import { setUser } from "@/lib/store";
+import { getUserFromCookie, saveUserCookie } from "@/lib/user-cookie";
 import { parseUserProfile } from "@/lib/validation";
 
 export async function PATCH(request: Request) {
@@ -18,7 +19,7 @@ export async function PATCH(request: Request) {
   if (!athleteId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  const user = getUser(athleteId);
+  const user = await getUserFromCookie();
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -33,11 +34,9 @@ export async function PATCH(request: Request) {
     ) {
       geminiKeyEncrypted = encryptSecret(body.geminiApiKey.trim(), enc);
     }
-    setUser(athleteId, {
-      ...user,
-      profile,
-      geminiKeyEncrypted,
-    });
+    const updated = { ...user, profile, geminiKeyEncrypted };
+    setUser(athleteId, updated);
+    await saveUserCookie(updated);
     return NextResponse.json({ ok: true });
   } catch (e) {
     const message = e instanceof Error ? e.message : "Invalid request";

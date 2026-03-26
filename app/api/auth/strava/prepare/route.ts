@@ -7,7 +7,7 @@ import {
   sealOAuthPendingPayload,
 } from "@/lib/oauth-pending";
 import { getSession } from "@/lib/session";
-import { getUser } from "@/lib/store";
+import { getUserFromCookie } from "@/lib/user-cookie";
 
 /** Creates a pending OAuth state from the logged-in user (reconnect Strava). */
 export async function POST() {
@@ -16,7 +16,7 @@ export async function POST() {
   if (!athleteId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  const user = getUser(athleteId);
+  const user = await getUserFromCookie();
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }

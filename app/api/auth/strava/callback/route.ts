@@ -7,6 +7,7 @@ import {
 } from "@/lib/oauth-pending";
 import { saveSession } from "@/lib/session";
 import { setUser } from "@/lib/store";
+import { saveUserCookie } from "@/lib/user-cookie";
 import type { StravaTokens, UserProfile } from "@/lib/types";
 
 /** Node fetch fails behind corporate TLS inspection (Zscaler, etc.) with this in the error chain. */
@@ -118,7 +119,7 @@ export async function GET(request: Request) {
 
     const athlete = await fetchAthlete(strava.accessToken);
 
-    setUser(athlete.id, {
+    const userData = {
       profile: pending.profile,
       geminiKeyEncrypted: pending.geminiKeyEncrypted,
       strava,
@@ -128,8 +129,9 @@ export async function GET(request: Request) {
         lastname: athlete.lastname,
         profile: athlete.profile,
       },
-    });
-
+    };
+    setUser(athlete.id, userData);
+    await saveUserCookie(userData);
     await saveSession({ athleteId: athlete.id });
 
     const ok = NextResponse.redirect(`${base}/chat?welcome=1`);

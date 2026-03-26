@@ -10,7 +10,8 @@ import {
   getValidStravaTokens,
   type StravaActivity,
 } from "@/lib/strava";
-import { getCachedPayload, setCachedPayload, setUser, getUser } from "@/lib/store";
+import { getCachedPayload, setCachedPayload, setUser } from "@/lib/store";
+import { getUserFromCookie, saveUserCookie } from "@/lib/user-cookie";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -45,7 +46,7 @@ export async function POST(request: Request) {
   if (!athleteId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  const user = getUser(athleteId);
+  const user = await getUserFromCookie();
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -80,7 +81,9 @@ export async function POST(request: Request) {
     freshTokens.accessToken !== user.strava.accessToken ||
     freshTokens.expiresAt !== user.strava.expiresAt
   ) {
-    setUser(athleteId, { ...user, strava: freshTokens });
+    const updated = { ...user, strava: freshTokens };
+    setUser(athleteId, updated);
+    await saveUserCookie(updated);
   }
 
   const cacheKey = `strava-activities:${athleteId}`;
